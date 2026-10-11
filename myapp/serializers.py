@@ -71,3 +71,65 @@ class PostListSerializer(serializers.ModelSerializer):
 
 
 
+class PostDetailSerializer(PostListSerializer):
+    liked_by = serializers.SerializerMethodField()
+    favorited_by = serializers.SerializerMethodField()
+    is_viral = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    class Meta(PostListSerializer.Meta):
+        fields = PostListSerializer.Meta.fields + [ "liked_by", "favorited_by", "is_viral", "status",]
+    def get_liked_by(self, obj):
+        users = User.objects.filter(likes__post=obj).distinct()
+        return UserShortSerializer(users, many=True).data
+    def get_favorited_by(self, obj):
+        users = User.objects.filter(favorites__post=obj).distinct()
+        return UserShortSerializer(users, many=True).data
+    def get_is_viral(self, obj):
+        return obj.likes_count >= 100
+    def get_status(self, obj):
+        if obj.likes_count:
+            return "has_likes"
+        return "no_likes"
+
+
+
+
+class LikeSerializer(serializers.ModelSerializer):
+    user = UserShortSerializer(read_only=True)
+    post = serializers.PrimaryKeyRelatedField( queryset=Post.objects.all() )
+    user_id = serializers.PrimaryKeyRelatedField( queryset=User.objects.all(),
+        source="user", write_only=True, )
+    class Meta:
+        model = Like
+        fields = ["id", "user", "user_id", "post", "created_at"]
+
+    def validate(self, attrs):
+        user = attrs.get("user", getattr(self.instance, "user", None))
+        post = attrs.get("post", getattr(self.instance, "post", None))
+        queryset = Like.objects.filter(user=user, post=post)
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise serializers.ValidationError( "Этот пользователь уже поставил лайк данной публикации " )
+        return attrs
+
+
+
+
+class FavoriteSerializer(serializers.ModelSerializer):
+    user = UserShortSerializer(read_only=True)
+    post = serializers.PrimaryKeyRelatedField( queryset=Post.objects.all() )
+    user_id = serializers.PrimaryKeyRelatedField( queryset=User.objects.all(), source="user", write_only=True, )
+    class Meta:
+        model = Favorite
+        fields = ["id", "user", "user_id", "post", "created_at"]
+
+    def validate(self, attrs):
+        user = attrs.get("user", getattr(self.instance, "user", None))
+        post = attrs.get("post", getattr(self.instance, "post", None))
+        queryset = Favorite.objects.filter(user=user, post=post)
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise serializers.ValidationError(  "Эта публикация уже находится в избранном пользователя")
+        return attrs
