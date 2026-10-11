@@ -1,0 +1,30 @@
+# Python / Django
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment (Виртуальное окружение)
+.venv/
+venv/
+ENV/
+env/
+
+# Database (Локальные базы данных)
+*.sqlite3
+*.db
+
+# Environment variables & secrets (Секретные ключи и переменные)
+.env
+.env.local
+
+# IDE / Editors (Настройки редакторов)
+.vscode/
+.idea/
+
+# Media and Static files (Загружаемые медиафайлы и собранный статик)
+media/
+staticfiles/
+
+# Logs (Логи ошибок)
+*.log
