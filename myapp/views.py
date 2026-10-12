@@ -104,3 +104,33 @@ class ProfileViewSet(viewsets.ModelViewSet):
     def city_statistics(self, request):
         data = ( Profile.objects.values("city") .annotate(users_count=Count("user", distinct=True)) .order_by("-users_count", "city"))
         return Response(list(data))
+
+
+class PostViewSet(viewsets.ModelViewSet):
+    queryset = post_queryset().select_related("user")
+    serializer_class = PostListSerializer
+    def get_queryset(self):
+        return post_queryset().select_related("user").order_by("-created_at")
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return PostDetailSerializer
+        return PostListSerializer
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+    @action(detail=False, methods=["get"])
+    def popular(self, request):
+        posts = post_queryset().filter( likes_count__gte=10 ).order_by("-likes_count", "-created_at")
+        return Response([ {
+                "id": post.id,
+                "title": post.title,
+                "likes_count": post.likes_count,
+                "favorites_count": post.favorites_count,
+                "is_popular": True,  } for post in posts ])
+
+    @action(detail=False, methods=["get"])
+    def search(self, request):
+        query = request.query_params.get("q", "")
+        posts = self.get_queryset().filter( Q(title__icontains=query) | Q(content__icontains=query))
+        return Response(PostListSerializer(posts, many=True).data)
