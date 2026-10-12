@@ -10,16 +10,22 @@ class UserShortSerializer(serializers.ModelSerializer):
         return f"{obj.first_name} {obj.last_name}".strip()
 
 
+
 class UserListSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
+    first_name = serializers.CharField(write_only=True)
+    last_name = serializers.CharField(write_only=True)
     posts_count = serializers.IntegerField(read_only=True)
     likes_count = serializers.IntegerField(read_only=True)
     favorites_count = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = User
-        fields = [ "id", "username", "full_name", "age", "posts_count", "likes_count", "favorites_count", ]
+        fields = [ "id", "username", "first_name", "last_name", "full_name", "age", "posts_count", "likes_count", "favorites_count",]
+
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}".strip()
+
 
 
 
