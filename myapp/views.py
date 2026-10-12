@@ -189,3 +189,44 @@ class FavoriteViewSet(viewsets.ModelViewSet):
 
 
 
+@api_view(["GET"])
+def post_likes(request, pk):
+    try:
+        post = Post.objects.get(pk=pk)
+    except Post.DoesNotExist:
+        return Response( {"detail": "публикация не найдена."}, status=status.HTTP_404_NOT_FOUND,  )
+    likes = Like.objects.filter(post=post).select_related("user")
+    return Response({ "post_id": post.id, "likes_count": likes.count(), "users": UserShortSerializer( [like.user for like in likes],   many=True,  ) .data, })
+
+
+@api_view(["GET"])
+def dashboard(request):
+    users_count = User.objects.count()
+    profiles_count = Profile.objects.count()
+    posts_count = Post.objects.count()
+    stats = post_queryset().aggregate( total_views=Coalesce(Sum("views"), 0), average_views=Avg("views"),)
+    most_active = user_queryset().order_by("-posts_count", "id").first()
+    most_popular = post_queryset().order_by("-likes_count", "-id").first()
+    latest = post_queryset().order_by("-created_at")[:5]
+
+    return Response({
+        "statistics": {
+            "users_count": users_count,
+            "profiles_count": profiles_count,
+            "posts_count": posts_count,
+            "likes_count": Like.objects.count(),
+            "favorites_count": Favorite.objects.count(),
+            "total_views": stats["total_views"],
+            "average_views": stats["average_views"],  },
+        "most_active_user": {
+            "id": most_active.id,
+            "username": most_active.username,
+            "posts_count": most_active.posts_count, } 
+            if most_active else None,
+        "most_popular_post": {
+            "id": most_popular.id,
+            "title": most_popular.title,
+            "likes_count": most_popular.likes_count, }
+             if most_popular else None,
+        "latest_posts": [ { "id": post.id, "title": post.title, "author": post.user.username, "likes_count": post.likes_count, }
+            for post in latest ], })
