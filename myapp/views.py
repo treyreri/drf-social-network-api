@@ -52,4 +52,55 @@ class UserViewSet(viewsets.ModelViewSet):
                          "min_age": stats["min_age"],
                          "max_age": stats["max_age"], })
 
-    
+    @action(detail=True, methods=["get"], url_path="posts")
+    def user_posts(self, request, pk=None):
+        user = self.get_object()
+        posts = post_queryset().filter(user=user).order_by("-created_at")
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(posts, request)
+
+        results = [ { "id": post.id, "title": post.title,  "likes_count": post.likes_count,  "views": post.views, } for post in page]
+        return Response({
+            "user": {  "id": user.id,  "username": user.username, },
+            "posts_count": posts.count(),
+            "results": results, })
+    @action(detail=True, methods=["get"])
+    def favorites(self, request, pk=None):
+        user = self.get_object()
+        favorites = Favorite.objects.filter(user=user).select_related("post")
+        return Response({
+            "user": user.username,
+            "favorites_count": favorites.count(),
+            "results": [ { "post_id": fav.post.id, "title": fav.post.title,
+                    "likes_count": fav.post.likes.count(), "views": fav.post.views,  } for fav in favorites ], })
+    @action(detail=True, methods=["get"])
+    def analytics(self, request, pk=None):
+        user = self.get_object()
+        posts = user.posts.all()
+        posts_stats = posts.aggregate(
+            posts_count=Count("id"), total_views=Coalesce(Sum("views"), 0),  average_views=Avg("views"), )
+        likes_received = Like.objects.filter(post__user=user).count()
+        favorites_received = Favorite.objects.filter( post__user=user ).count()
+        week_ago = timezone.now() - timedelta(days=7)
+        posts_last_7_days = posts.filter(created_at__gte=week_ago).count()
+        return Response({  "user": {  "id": user.id, "username": user.username,"full_name": f"{user.first_name} {user.last_name}".strip(), },
+            "posts": {
+                "posts_count": posts_stats["posts_count"],
+                "total_views": posts_stats["total_views"],
+                "average_views": posts_stats["average_views"],  },
+            "engagement": {
+                "likes_received": likes_received,
+                "favorites_received": favorites_received,
+                "likes_given": user.likes.count(),
+                "favorites_given": user.favorites.count(), },
+            "activity": {
+                "posts_last_7_days": posts_last_7_days,
+                "is_active_user": posts_last_7_days > 0, }, })
+
+class ProfileViewSet(viewsets.ModelViewSet):
+    queryset = Profile.objects.select_related("user").all()
+    serializer_class = ProfileSerializer
+    @action(detail=False, methods=["get"], url_path="city-statistics")
+    def city_statistics(self, request):
+        data = ( Profile.objects.values("city") .annotate(users_count=Count("user", distinct=True)) .order_by("-users_count", "city"))
+        return Response(list(data))
