@@ -167,3 +167,25 @@ class PostViewSet(viewsets.ModelViewSet):
                 "total_views": user.total_views,
                 "average_views": user.average_views,
                 "likes_received": user.likes_received,  } for user in data ])
+
+
+class LikeViewSet(viewsets.ModelViewSet):
+    queryset = Like.objects.select_related("user", "post").all()
+    serializer_class = LikeSerializer
+    http_method_names = ["get", "post", "delete", "head", "options"]
+
+    @action(detail=False, methods=["get"], url_path="top-posts")
+    def top_posts(self, request):
+        data = ( Post.objects.annotate(likes_count=Count("likes")) .filter(likes_count__gt=0) .order_by("-likes_count", "id")[:10])
+        return Response([ { "post_id": post.id, "title": post.title, "likes_count": post.likes_count,}
+            for post in data ])
+
+
+
+class FavoriteViewSet(viewsets.ModelViewSet):
+    queryset = Favorite.objects.select_related("user", "post").all()
+    serializer_class = FavoriteSerializer
+    http_method_names = ["get", "post", "delete", "head", "options"]
+
+
+
