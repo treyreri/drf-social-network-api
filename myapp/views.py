@@ -4,7 +4,7 @@ from django.utils import timezone
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
-
+from django.db.models.functions import Coalesce
 from .models import *
 from .serializers import *
 from .filters import PostFilter
@@ -134,3 +134,36 @@ class PostViewSet(viewsets.ModelViewSet):
         query = request.query_params.get("q", "")
         posts = self.get_queryset().filter( Q(title__icontains=query) | Q(content__icontains=query))
         return Response(PostListSerializer(posts, many=True).data)
+
+    @action(detail=False, methods=["get"])
+    def filter(self, request):
+        filtered = PostFilter( request.query_params, queryset=self.get_queryset(), ).qs
+        return Response(PostListSerializer(filtered, many=True).data)
+
+    @action(detail=False, methods=["get"])
+    def statistics(self, request):
+        stats = post_queryset().aggregate(
+            total_posts=Count("id", distinct=True),
+            total_views=Coalesce(Sum("views"), 0),
+            average_views=Avg("views"),
+            max_views=Max("views"),
+            min_views=Min("views"),)
+
+        return Response({**stats,
+            "total_likes": Like.objects.count(),
+            "total_favorites": Favorite.objects.count(), })
+
+    @action(detail=False, methods=["get"], url_path="author-statistics")
+    def author_statistics(self, request):
+        data = user_queryset().annotate(
+            total_views=Coalesce(Sum("posts__views"), 0),
+            average_views=Avg("posts__views"),
+            likes_received=Count("posts__likes", distinct=True), ).order_by("id")
+
+        return Response([ {
+                "user_id": user.id,
+                "username": user.username,
+                "posts_count": user.posts_count,
+                "total_views": user.total_views,
+                "average_views": user.average_views,
+                "likes_received": user.likes_received,  } for user in data ])
