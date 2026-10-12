@@ -102,8 +102,9 @@ class ProfileViewSet(viewsets.ModelViewSet):
     serializer_class = ProfileSerializer
     @action(detail=False, methods=["get"], url_path="city-statistics")
     def city_statistics(self, request):
-        data = ( Profile.objects.values("city") .annotate(users_count=Count("user", distinct=True)) .order_by("-users_count", "city"))
+        data = ( Profile.objects.values("city") .annotate(users_count=Count("user", distinct=True)) .order_by("-users_count", "city") )
         return Response(list(data))
+
 
 
 class PostViewSet(viewsets.ModelViewSet):
