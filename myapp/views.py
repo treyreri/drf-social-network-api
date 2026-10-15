@@ -6,15 +6,22 @@ from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from django.db.models.functions import Coalesce
 from .models import *
+from drf_yasg.utils import swagger_auto_schema
 from .serializers import *
 from .filters import PostFilter
 from rest_framework import viewsets, status
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from .permissions import IsOwnerOrReadOnly
 
 def post_queryset():
     return Post.objects.annotate( likes_count=Count("likes", distinct=True), favorites_count=Count("favorites", distinct=True), )
 
 def user_queryset():
     return User.objects.annotate( posts_count=Count("posts", distinct=True), likes_count=Count("likes", distinct=True), favorites_count=Count("favorites", distinct=True), )
+
+
+def perform_create(self, serializer):
+    serializer.save(user=serializer.validated_data["user"])
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -31,12 +38,19 @@ class UserViewSet(viewsets.ModelViewSet):
             return UserListSerializer
         return UserListSerializer
 
+    @swagger_auto_schema(
+    method='get',
+    responses={200: UserListSerializer(many=True)}) 
     @action(detail=False, methods=["get"], url_path="most-active")
     def most_active(self, request):
         users = user_queryset().order_by("-posts_count", "id")[:10]
         data = [ {"id": user.id, "username": user.username, "posts_count": user.posts_count,} for user in users]
         return Response(data)
 
+
+    @swagger_auto_schema(
+    method='get',
+    responses={200: UserListSerializer(many=True)})
     @action(detail=False, methods=["get"])
     def statistics(self, request):
         stats = User.objects.aggregate(
@@ -52,6 +66,10 @@ class UserViewSet(viewsets.ModelViewSet):
                          "min_age": stats["min_age"],
                          "max_age": stats["max_age"], })
 
+
+    @swagger_auto_schema(
+    method='get',
+    responses={200: UserListSerializer(many=True)})
     @action(detail=True, methods=["get"], url_path="posts")
     def user_posts(self, request, pk=None):
         user = self.get_object()
@@ -64,6 +82,11 @@ class UserViewSet(viewsets.ModelViewSet):
             "user": {  "id": user.id,  "username": user.username, },
             "posts_count": posts.count(),
             "results": results, })
+    
+    
+    @swagger_auto_schema(
+    method='get',
+    responses={200: UserListSerializer(many=True)})
     @action(detail=True, methods=["get"])
     def favorites(self, request, pk=None):
         user = self.get_object()
@@ -73,6 +96,11 @@ class UserViewSet(viewsets.ModelViewSet):
             "favorites_count": favorites.count(),
             "results": [ { "post_id": fav.post.id, "title": fav.post.title,
                     "likes_count": fav.post.likes.count(), "views": fav.post.views,  } for fav in favorites ], })
+
+
+    @swagger_auto_schema(
+        method='get',
+        responses={200: UserListSerializer(many=True)})
     @action(detail=True, methods=["get"])
     def analytics(self, request, pk=None):
         user = self.get_object()
@@ -100,6 +128,10 @@ class UserViewSet(viewsets.ModelViewSet):
 class ProfileViewSet(viewsets.ModelViewSet):
     queryset = Profile.objects.select_related("user").all()
     serializer_class = ProfileSerializer
+    
+    @swagger_auto_schema(
+        method='get',
+        responses={200: ProfileSerializer(many=True)})
     @action(detail=False, methods=["get"], url_path="city-statistics")
     def city_statistics(self, request):
         data = ( Profile.objects.values("city") .annotate(users_count=Count("user", distinct=True)) .order_by("-users_count", "city") )
@@ -120,6 +152,11 @@ class PostViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save()
 
+    permission_classes = [ IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly, ]
+
+    @swagger_auto_schema(
+    method='get',
+    responses={200: PostListSerializer(many=True)})
     @action(detail=False, methods=["get"])
     def popular(self, request):
         posts = post_queryset().filter( likes_count__gte=10 ).order_by("-likes_count", "-created_at")
@@ -130,17 +167,30 @@ class PostViewSet(viewsets.ModelViewSet):
                 "favorites_count": post.favorites_count,
                 "is_popular": True,  } for post in posts ])
 
+
+    @swagger_auto_schema(
+    method='get',
+    responses={200: PostListSerializer(many=True)})
     @action(detail=False, methods=["get"])
     def search(self, request):
         query = request.query_params.get("q", "")
         posts = self.get_queryset().filter( Q(title__icontains=query) | Q(content__icontains=query))
         return Response(PostListSerializer(posts, many=True).data)
 
+    @swagger_auto_schema(
+        method='get',
+        responses={200: PostListSerializer(many=True)} )
     @action(detail=False, methods=["get"])
     def filter(self, request):
-        filtered = PostFilter( request.query_params, queryset=self.get_queryset(), ).qs
+        filtered = PostFilter(
+            request.query_params,
+            queryset=self.get_queryset(), ).qs
+
         return Response(PostListSerializer(filtered, many=True).data)
 
+    @swagger_auto_schema(
+        method='get',
+        responses={200: PostListSerializer(many=True)})
     @action(detail=False, methods=["get"])
     def statistics(self, request):
         stats = post_queryset().aggregate(
@@ -154,6 +204,9 @@ class PostViewSet(viewsets.ModelViewSet):
             "total_likes": Like.objects.count(),
             "total_favorites": Favorite.objects.count(), })
 
+    @swagger_auto_schema(
+        method='get',
+        responses={200: PostListSerializer(many=True)})
     @action(detail=False, methods=["get"], url_path="author-statistics")
     def author_statistics(self, request):
         data = user_queryset().annotate(
@@ -175,6 +228,10 @@ class LikeViewSet(viewsets.ModelViewSet):
     serializer_class = LikeSerializer
     http_method_names = ["get", "post", "delete", "head", "options"]
 
+
+    @swagger_auto_schema(
+        method='get',
+        responses={200: LikeSerializer(many=True)})
     @action(detail=False, methods=["get"], url_path="top-posts")
     def top_posts(self, request):
         data = ( Post.objects.annotate(likes_count=Count("likes")) .filter(likes_count__gt=0) .order_by("-likes_count", "id")[:10])

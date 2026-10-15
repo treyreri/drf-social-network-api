@@ -1,16 +1,18 @@
 from django.db import models
 from django.db import models
 from django.db.models import Q
+from django.db import models
+from django.db import models
+from django.contrib.auth.models import AbstractUser
 
-class User(models.Model):
-    username = models.CharField(max_length=100, unique=True)
-    first_name = models.CharField(max_length=100)
-    last_name = models.CharField(max_length=100)
-    age = models.PositiveIntegerField()
-    created_at = models.DateTimeField(auto_now_add=True)
-
+class User(AbstractUser):
+    age = models.PositiveIntegerField( null=True, blank=True )
+    created_at = models.DateTimeField( auto_now_add=True )
+    ROLE_CHOICES = [ ("user", "User"), ("admin", "Admin"), ]
+    role = models.CharField( max_length=10, choices=ROLE_CHOICES, default="user")
     def __str__(self):
         return self.username
+
 
 
 class Profile(models.Model):

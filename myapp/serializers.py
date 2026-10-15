@@ -79,7 +79,7 @@ class PostListSerializer(serializers.ModelSerializer):
             "is_popular", "created_at",  ]
 
     def get_is_popular(self, obj):
-        return obj.likes_count >= 10
+       return obj.likes.count() >= 10
 
 
 
